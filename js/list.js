@@ -2,6 +2,7 @@
 import * as S from './store.js';
 import { actionSheet, textSheet, confirmSheet, toast } from './ui.js';
 import { esc, pl, zap, linkify, autosize } from './util.js';
+import { ICON_PHOTO, thumbsHTML, hydrate, viewPhotos, pendingStrip, addPending, storePhotos, discardPending } from './photos.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>';
 const ICON_MORE = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>';
@@ -30,6 +31,7 @@ export async function branchMenu(bubble, branch) {
     const n = branch.items.length;
     const ok = await confirmSheet(n ? `Удалить ветку «${branch.name}» и ${zap(n)}?` : `Удалить ветку «${branch.name}»?`, 'Удалить');
     if (!ok) return null;
+    S.dropPhotos(branch.items);
     bubble.branches = bubble.branches.filter((b) => b !== branch);
     S.save();
     return 'deleted';
@@ -52,7 +54,7 @@ function roughRect(w, h, p, r) {
     + ` M${x0 + 1 + j()} ${y1 + 4 + j()} Q${x0 - 1.4 + j(3)} ${(y0 + y1) / 2 + j(4)} ${x0 + j()} ${y0 - 4 + j()}`;
 }
 
-export function openList({ bubble, branch, backLabel, onClose }) {
+export function openList({ bubble, branch, backLabel, onClose, focusId = null }) {
   const panel = document.createElement('section');
   panel.className = 'panel pond';
   panel.setAttribute('aria-label', 'Ветка');
@@ -73,6 +75,8 @@ export function openList({ bubble, branch, backLabel, onClose }) {
       <ul class="list done"></ul>
     </div>
     <form class="composer" autocomplete="off">
+      <div class="pending" hidden></div>
+      <button class="addph" type="button" aria-label="Добавить фото или скриншот">${ICON_PHOTO}</button>
       <textarea rows="1" placeholder="Новая запись…" enterkeyhint="send" aria-label="Новая запись"></textarea>
       <button class="send" type="submit" aria-label="Добавить запись">${ICON_UP}</button>
     </form>`;
@@ -90,7 +94,7 @@ export function openList({ bubble, branch, backLabel, onClose }) {
         <div class="content">
           ${isDone ? '' : `<span class="grip" aria-label="Перетащить">${ICON_GRIP}</span>`}
           <button class="check" type="button" aria-label="${isDone ? 'Вернуть в работу' : 'Отметить выполненным'}">${ICON_CHECK}</button>
-          <div class="body"><p class="txt">${linkify(it.text)}</p></div>
+          <div class="body">${it.text ? `<p class="txt">${linkify(it.text)}</p>` : ''}${thumbsHTML(it.photos)}</div>
           ${isDone ? '' : `<button class="mark${fresh.has(it.id) ? ' fresh' : ''}" type="button" aria-pressed="${!!it.main}" aria-label="Главный шаг">${it.main ? PENCIL_EXCL : '!'}</button>`}
         </div>
       </div>
@@ -113,6 +117,7 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     sec.hidden = done.length === 0;
     sec.textContent = `Выполнено · ${done.length}`;
     fresh.clear();
+    hydrate(sheet);
     requestAnimationFrame(drawFrames);
   }
 
@@ -138,8 +143,14 @@ export function openList({ bubble, branch, backLabel, onClose }) {
   /* edit text */
   function startEdit(row, it) {
     const body = row.querySelector('.body');
-    body.innerHTML = '<textarea class="edit" rows="1" enterkeyhint="done" aria-label="Текст записи"></textarea>';
-    const ta = body.firstChild;
+    const ta = document.createElement('textarea');
+    ta.className = 'edit';
+    ta.rows = 1;
+    ta.enterKeyHint = 'done';
+    ta.setAttribute('aria-label', 'Текст записи');
+    ta.placeholder = 'Подпись к фото';
+    const txt = body.querySelector('.txt');
+    if (txt) txt.replaceWith(ta); else body.prepend(ta);
     ta.value = it.text;
     autosize(ta);
     ta.focus();
@@ -149,7 +160,7 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); } });
     ta.addEventListener('blur', () => {
       const v = ta.value.trim();
-      if (v && v !== it.text) { it.text = v; S.save(); }
+      if (v !== it.text && (v || it.photos?.length)) { it.text = v; S.save(); }
       render();
     }, { once: true });
   }
@@ -169,7 +180,8 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     return nb;
   }
   async function pickOtherBubble() {
-    const others = S.space().bubbles.filter((b) => !b.archived && b !== bubble && !(bubble.inbox && b.inbox));
+    const home = S.findBubble(bubble.id)?.space || S.space(); // из поиска ветка может быть в другом пространстве
+    const others = home.bubbles.filter((b) => !b.archived && b !== bubble && !(bubble.inbox && b.inbox));
     if (!others.length) { toast('Сначала создай пузырь-проект'); return null; }
     const bid = await actionSheet('В какой пузырь?', others.map((b) => ({ label: b.name, value: b.id })));
     return others.find((b) => b.id === bid) || null;
@@ -213,6 +225,7 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     const it = find(row.dataset.id);
     if (!it) return;
     if (e.target.closest('.act.del')) {
+      S.dropPhotos([it]);
       branch.items = branch.items.filter((i) => i !== it);
       S.save(); render(); toast('Запись удалена'); return;
     }
@@ -230,8 +243,23 @@ export function openList({ bubble, branch, backLabel, onClose }) {
       if (it.main) fresh.add(it.id);
       S.save(); render(); return;
     }
-    if (e.target.closest('.txt')) startEdit(row, it);
+    const th = e.target.closest('.thumb');
+    if (th) { openPhoto(it, +th.dataset.i); return; }
+    if (e.target.closest('.txt') || (!it.text && e.target.closest('.body'))) startEdit(row, it);
   });
+
+  function openPhoto(it, i) {
+    viewPhotos(it.photos, i, {
+      onDelete: (id) => {
+        it.photos = it.photos.filter((x) => x !== id);
+        S.dropPhotos([{ photos: [id] }]);
+        if (!it.text && !it.photos.length) branch.items = branch.items.filter((x) => x !== it);
+        S.save();
+        render();
+        toast('Фото удалено');
+      },
+    });
+  }
 
   /* swipe */
   let sw = null;
@@ -292,11 +320,22 @@ export function openList({ bubble, branch, backLabel, onClose }) {
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
   });
-  form.addEventListener('submit', (e) => {
+  const pending = [];
+  const addBtn = form.querySelector('.addph');
+  const redrawPending = pendingStrip(form.querySelector('.pending'), pending);
+  addBtn.addEventListener('click', () => addPending(pending, redrawPending, addBtn).then((n) => { if (n) input.focus(); }));
+  let sending = false;
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const t = input.value.trim();
-    if (!t) return;
-    branch.items.push(S.newItem(t));
+    if ((!t && !pending.length) || sending) return;
+    sending = true;
+    let ids = [];
+    try { ids = await storePhotos(pending.splice(0)); } catch (err) { console.error(err); toast('Не удалось сохранить фото'); }
+    sending = false;
+    redrawPending();
+    if (!t && !ids.length) return;
+    branch.items.push(S.newItem(t, ids));
     S.save();
     input.value = '';
     autosize(input);
@@ -315,6 +354,7 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     window.removeEventListener('pointercancel', onCancel);
     ro?.disconnect();
     sortable?.destroy();
+    discardPending(pending);
     panel.classList.remove('in');
     setTimeout(() => panel.remove(), 400);
     onClose?.();
@@ -327,5 +367,16 @@ export function openList({ bubble, branch, backLabel, onClose }) {
   });
 
   render();
-  return { close };
+  if (focusId) {
+    const row = sheet.querySelector(`.row[data-id="${focusId}"]`);
+    if (row) {
+      requestAnimationFrame(() => {
+        const y = row.getBoundingClientRect().top - sheet.getBoundingClientRect().top + sheet.scrollTop;
+        sheet.scrollTo({ top: Math.max(0, y - sheet.clientHeight / 3) });
+      });
+      row.classList.add('flash');
+      setTimeout(() => row.classList.remove('flash'), 2200);
+    }
+  }
+  return { close, render };
 }

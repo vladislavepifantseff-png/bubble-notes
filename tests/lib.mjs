@@ -51,7 +51,7 @@ export async function seed(page, build) {
     const spaces = new Function('h', `return (${src})(h)`)(h);
     const state = { version: 1, spaces, currentSpace: spaces[0].id };
     await new Promise((res, rej) => {
-      const r = indexedDB.open('bubble-notes', 1);
+      const r = indexedDB.open('bubble-notes');
       r.onupgradeneeded = () => r.result.createObjectStore('kv');
       r.onsuccess = () => { const tx = r.result.transaction('kv', 'readwrite'); tx.objectStore('kv').put(state, 'state'); tx.oncomplete = res; tx.onerror = rej; };
     });
@@ -88,7 +88,7 @@ export const sheet = (page) => page.evaluate(() => [...document.querySelectorAll
 
 /** Состояние из IndexedDB в виде строк «Пространство: Пузырь[Ветка(записи) …] …». */
 export const dump = (page) => page.evaluate(() => new Promise((res) => {
-  const r = indexedDB.open('bubble-notes', 1);
+  const r = indexedDB.open('bubble-notes');
   r.onsuccess = () => {
     const q = r.result.transaction('kv').objectStore('kv').get('state');
     q.onsuccess = () => res(q.result.spaces.map((s) => `${s.name}: ` + s.bubbles.map((b) => `${b.name}[${b.branches.map((x) => `${x.name}(${x.items.map((i) => i.text).join(',')})`).join(' ')}]`).join(' ')));

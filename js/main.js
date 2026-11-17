@@ -3,6 +3,10 @@ import { BubbleField } from './physics.js';
 import { actionSheet, textSheet, confirmSheet, toast, captureSheet, TOAST_BAND } from './ui.js';
 import { openList, branchMenu } from './list.js';
 import { esc, pl, zap } from './util.js';
+import { storePhotos, pickPhotos } from './photos.js';
+import { openArchive } from './archive.js';
+import { openSearch } from './search.js';
+import { exportData, readBackup, restore } from './backup.js';
 
 const $ = (s) => document.querySelector(s);
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
@@ -26,7 +30,7 @@ const ui = {
   tabs: $('#tabs'), meta: $('#meta'), top: $('#top'), top2: $('#top2'),
   back: $('#back'), backLabel: $('#backLabel'), more: $('#more'),
   wrap: $('#branchWrap'), layer: $('#branches'), links: $('#links'),
-  hint: $('#hint'), plus: $('#plus'), newB: $('#newBubble'), bar: $('#bar'),
+  hint: $('#hint'), plus: $('#plus'), newB: $('#newBubble'), bar: $('#bar'), search: $('#search'),
 };
 
 let view = 'space';   // 'space' | 'bubble'
@@ -61,9 +65,12 @@ function renderTabs() {
 }
 
 function renderMeta() {
-  const bubbles = S.space().bubbles.filter((b) => !b.archived && !b.inbox);
-  const total = S.space().bubbles.reduce((n, b) => n + S.activeCount(b), 0);
-  ui.meta.textContent = `${bubbles.length} ${pl(bubbles.length, 'пузырь', 'пузыря', 'пузырей')} · ${zap(total)}`;
+  const live = S.space().bubbles.filter((b) => !b.archived);
+  const bubbles = live.filter((b) => !b.inbox);
+  const total = live.reduce((n, b) => n + S.activeCount(b), 0);
+  const arch = S.space().bubbles.filter((b) => b.archived).length;
+  ui.meta.innerHTML = `<span>${bubbles.length} ${pl(bubbles.length, 'пузырь', 'пузыря', 'пузырей')} · ${zap(total)}</span>`
+    + (arch ? `<button type="button" class="meta-arch" data-arch="1">архив · ${arch}</button>` : '');
 }
 
 function renderHint() {
@@ -97,10 +104,15 @@ function switchSpace(id) {
 
 async function spaceMenu() {
   const sp = S.space();
+  const arch = sp.bubbles.filter((b) => b.archived).length;
   const actions = [{ label: 'Переименовать', value: 'rename' }];
+  actions.push({ label: arch ? `Архив · ${arch}` : 'Архив', value: 'archive' });
+  actions.push({ label: 'Резервная копия', value: 'backup' });
   if (S.state.spaces.length > 1) actions.push({ label: 'Удалить пространство', value: 'delete', danger: true });
   const v = await actionSheet(`Пространство «${sp.name}»`, actions);
-  if (v === 'rename') {
+  if (v === 'archive') showArchive();
+  else if (v === 'backup') backupMenu();
+  else if (v === 'rename') {
     const name = await textSheet({ title: 'Название пространства', value: sp.name, ok: 'Сохранить' });
     if (name) { sp.name = name; S.save(); renderTabs(); }
   } else if (v === 'delete') {
@@ -108,9 +120,59 @@ async function spaceMenu() {
     const bubbles = sp.bubbles.filter((b) => !b.inbox).length;
     const ok = await confirmSheet(`Удалить «${sp.name}»: ${bubbles} ${pl(bubbles, 'пузырь', 'пузыря', 'пузырей')}, ${zap(n)}?`, 'Удалить');
     if (!ok) return;
+    S.dropPhotos(S.itemsOf(sp.bubbles));
     S.state.spaces = S.state.spaces.filter((s) => s !== sp);
     switchSpace(S.state.spaces[0].id);
   }
+}
+
+ui.meta.addEventListener('click', (e) => { if (e.target.closest('[data-arch]')) showArchive(); });
+
+/* ---------- архив, поиск, резервная копия ---------- */
+function showArchive() {
+  field.stop();
+  listOpen = openArchive({ onClose: () => { listOpen = null; field.start(); refresh(); } });
+}
+
+ui.search.addEventListener('click', () => {
+  field.stop();
+  listOpen = openSearch({ onClose: () => { listOpen = null; field.start(); refresh(); } });
+});
+
+const fmtDay = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+async function backupMenu() {
+  const last = S.state.lastExport;
+  const v = await actionSheet(last ? `Последняя копия: ${fmtDay(last)}` : 'Копий ещё не было. Все записи и фото — в одном файле.', [
+    { label: 'Сохранить копию в файл', value: 'export' },
+    { label: 'Восстановить из файла…', value: 'import' },
+  ]);
+  if (v === 'export') {
+    toast('Готовлю файл…');
+    try {
+      const res = await exportData();
+      if (res !== 'cancelled') toast('Копия сохранена');
+    } catch (e) { console.error(e); toast('Не удалось сохранить копию'); }
+  } else if (v === 'import') {
+    importFlow();
+  }
+}
+
+async function importFlow() {
+  // выбор файла — сразу после нажатия (iOS не откроет его после await)
+  const [file] = await pickPhotos({ accept: '', multiple: false });
+  if (!file) return;
+  let parsed;
+  try { parsed = await readBackup(file); } catch (e) { toast(e.message); return; }
+  const c = parsed.counts;
+  const when = c.date ? ` от ${fmtDay(c.date)}` : '';
+  const ok = await confirmSheet(
+    `Копия${when}: ${c.bubbles} ${pl(c.bubbles, 'пузырь', 'пузыря', 'пузырей')}, ${zap(c.items)}, фото: ${c.photos}. `
+    + 'Всё, что сейчас в приложении, заменится содержимым файла.', 'Заменить всё');
+  if (!ok) return;
+  try {
+    await restore(parsed.data);
+    location.reload();
+  } catch (e) { console.error(e); toast('Не удалось восстановить'); }
 }
 
 ui.tabs.addEventListener('click', async (e) => {
@@ -264,9 +326,16 @@ ui.more.addEventListener('click', async () => {
   const v = await actionSheet(`Пузырь «${bubble.name}»`, [
     { label: 'Переименовать', value: 'rename' },
     { label: 'Перенести в другое пространство', value: 'move' },
+    { label: 'В архив', value: 'archive' },
     { label: 'Удалить пузырь', value: 'delete', danger: true },
   ]);
-  if (v === 'move') {
+  if (v === 'archive') {
+    bubble.archived = true;
+    bubble.archivedAt = Date.now();
+    S.save();
+    closeBubble();
+    toast(`«${bubble.name}» в архиве`);
+  } else if (v === 'move') {
     await moveBubble(space, bubble);
   } else if (v === 'rename') {
     const name = await textSheet({ title: 'Название пузыря', value: bubble.name, ok: 'Сохранить' });
@@ -275,6 +344,7 @@ ui.more.addEventListener('click', async () => {
     const n = S.totalCount(bubble);
     const ok = await confirmSheet(n ? `Удалить «${bubble.name}» и ${zap(n)}?` : `Удалить «${bubble.name}»?`, 'Удалить');
     if (!ok) return;
+    S.dropPhotos(S.itemsOf([bubble]));
     space.bubbles = space.bubbles.filter((b) => b !== bubble);
     S.save();
     closeBubble();
@@ -328,7 +398,10 @@ ui.plus.addEventListener('click', async () => {
   if (!res) return;
   const bubble = res.bubbleId ? sp.bubbles.find((b) => b.id === res.bubbleId) : S.inboxOf(sp);
   const br = (res.branchId && bubble.branches.find((x) => x.id === res.branchId)) || S.miscOf(bubble);
-  br.items.push(S.newItem(res.text));
+  let photos = [];
+  try { photos = await storePhotos(res.photos); } catch (e) { console.error(e); toast('Не удалось сохранить фото'); }
+  if (!res.text && !photos.length) return;
+  br.items.push(S.newItem(res.text, photos));
   S.save();
   refresh();
   field.pulse(bubble.id);

@@ -1,4 +1,5 @@
 import { esc, autosize } from './util.js';
+import { ICON_PHOTO, pendingStrip, addPending, discardPending } from './photos.js';
 
 function mount(inner, cls = '') {
   const ov = document.createElement('div');
@@ -57,7 +58,8 @@ export function textSheet({ title, value = '', placeholder = '', ok = 'Гото�
   });
 }
 
-/** Быстрая запись идеи: текст + (необязательно) пузырь и ветка. */
+/** Быстрая запись идеи: текст и/или фото + (необязательно) пузырь и ветка.
+ *  Возвращает { text, photos, bubbleId, branchId }; photos — подготовленные, но ещё не сохранённые. */
 export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
   return new Promise((resolve) => {
     let selB = bubbleId;
@@ -65,13 +67,18 @@ export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
     const ov = mount(
       `<form class="cap" style="display:grid;gap:10px">
          <textarea rows="3" placeholder="Что пришло в голову?" aria-label="Текст идеи"></textarea>
+         <div class="pending" hidden></div>
          <div class="chips" data-k="b"></div>
          <div class="chips sub" data-k="br"></div>
          <div class="cap-note"></div>
-         <div class="sh-row"><button class="sh-btn cancel" type="button">Отмена</button><button class="sh-btn ok" type="submit">Записать</button></div>
+         <div class="sh-row"><button class="sh-btn addph" type="button" aria-label="Добавить фото или скриншот">${ICON_PHOTO}</button><button class="sh-btn cancel" type="button">Отмена</button><button class="sh-btn ok" type="submit">Записать</button></div>
        </form>`
     );
     const ta = ov.querySelector('textarea');
+    const pending = [];
+    const redraw = pendingStrip(ov.querySelector('.pending'), pending);
+    const addBtn = ov.querySelector('.addph');
+    addBtn.addEventListener('click', () => addPending(pending, redraw, addBtn));
     const rowB = ov.querySelector('[data-k="b"]');
     const rowBr = ov.querySelector('[data-k="br"]');
     const note = ov.querySelector('.cap-note');
@@ -91,7 +98,7 @@ export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
     draw();
 
     ov.addEventListener('click', (e) => {
-      if (e.target.classList.contains('ov-bg') || e.target.closest('.cancel')) { unmount(ov); resolve(null); return; }
+      if (e.target.classList.contains('ov-bg') || e.target.closest('.cancel')) { discardPending(pending); unmount(ov); resolve(null); return; }
       const cb = e.target.closest('[data-b]');
       if (cb) { selB = selB === cb.dataset.b ? null : cb.dataset.b; selBr = null; draw(); return; }
       const cbr = e.target.closest('[data-br]');
@@ -100,9 +107,10 @@ export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
     ov.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const text = ta.value.trim();
-      if (!text) { ta.focus(); return; }
+      if (!text && !pending.length) { ta.focus(); return; }
+      if (addBtn.classList.contains('busy')) return;
       unmount(ov);
-      resolve({ text, bubbleId: selB, branchId: selBr });
+      resolve({ text, photos: pending, bubbleId: selB, branchId: selBr });
     });
   });
 }

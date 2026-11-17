@@ -1,9 +1,10 @@
 // Офлайн-кэш: отдаём из кэша сразу, свежую версию подтягиваем в фоне
 // (обновления приложения видны со следующего запуска).
-const CACHE = 'bubble-notes-v3';
+const CACHE = 'bubble-notes-v4';
 const ASSETS = [
   './', 'index.html', 'css/app.css',
   'js/main.js', 'js/store.js', 'js/physics.js', 'js/ui.js', 'js/list.js', 'js/util.js',
+  'js/photos.js', 'js/archive.js', 'js/search.js', 'js/backup.js',
   'vendor/Sortable.min.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
