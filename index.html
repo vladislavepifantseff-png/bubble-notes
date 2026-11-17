@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0F1E28">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Бабл">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>Заметки Бабл</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <filter id="pencil" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="4" result="wob"/>
+        <feDisplacementMap in="SourceGraphic" in2="wob" scale="2.2" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="1" seed="9" result="grain"/>
+        <feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.7 0 0 0 -0.25" result="ga"/>
+        <feComposite in="d" in2="ga" operator="in"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="app pond">
+    <div id="field" class="field"></div>
+
+    <div id="branchWrap" class="branch-wrap">
+      <svg id="links" class="links" aria-hidden="true"></svg>
+      <div id="branches" class="branches"></div>
+    </div>
+
+    <header id="top" class="top">
+      <div id="tabs" class="tabs"></div>
+      <div id="meta" class="meta"></div>
+    </header>
+
+    <header id="top2" class="top2" hidden>
+      <button id="back" class="pill glass" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>
+        <span id="backLabel">Проекты</span>
+      </button>
+      <button id="more" class="round glass" type="button" aria-label="Пузырь: переименовать или удалить">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+      </button>
+    </header>
+
+    <div id="hint" class="hint"></div>
+
+    <footer id="bar" class="bar">
+      <button id="newBubble" class="side glass" type="button" aria-label="Новый пузырь">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="13" r="7.5"/><path d="M19 2.5v5M16.5 5h5"/></svg>
+      </button>
+      <button id="plus" class="plus" type="button" aria-label="Записать идею">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <span class="side" aria-hidden="true" style="visibility:hidden"></span>
+    </footer>
+  </div>
+
+  <script src="vendor/Sortable.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
