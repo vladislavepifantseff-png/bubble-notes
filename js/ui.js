@@ -115,6 +115,20 @@ export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
   });
 }
 
+/**
+ * Убрать экран-панель вниз одним движением. Если открыта клавиатура, панель сначала
+ * закрепляется на месте во всю высоту экрана: иначе, пока клавиатура уезжает,
+ * панель вытягивается вниз за ней, и только потом уходит (лишний шаг).
+ */
+export function slideAway(panel) {
+  const top = panel.getBoundingClientRect().top;
+  panel.style.top = `${top}px`;
+  panel.style.height = `${Math.max(innerHeight, document.documentElement.clientHeight) - top}px`;
+  panel.classList.remove('in');
+  document.activeElement?.blur?.();
+  setTimeout(() => panel.remove(), 400);
+}
+
 /** Где показать уведомление, чтобы не закрывать кнопки, пузыри и записи. */
 export const TOAST_BAND = 40; // свободная полоса под вкладками главного экрана
 function toastTop() {

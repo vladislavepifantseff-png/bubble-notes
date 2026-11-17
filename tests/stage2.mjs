@@ -134,7 +134,17 @@ check(await page.$eval('.panel:last-of-type .p-title', (e) => e.textContent) ===
 await page.screenshot({ path: `${OUT}/s2-8-search-open.png` });
 await tap(page, '.panel:last-of-type .back'); await sleep(700);
 check(await page.$$eval('.panel', (p) => p.length) === 1 && await page.$('.panel.search'), '«Назад» возвращает к результатам поиска');
-await tap(page, '.panel.search .back'); await sleep(700);
+// выход из поиска при открытой клавиатуре: панель не вытягивается вслед за клавиатурой, а сразу уезжает
+await page.evaluate(() => document.documentElement.style.setProperty('--vvh', '480px')); // «клавиатура открыта»
+await sleep(100);
+await tap(page, '.panel.search .back');
+const h0 = await page.evaluate(() => document.querySelector('.panel.search').offsetHeight); // клавиатура ещё на месте
+await page.evaluate(() => document.documentElement.style.setProperty('--vvh', '844px')); // клавиатура убралась
+await sleep(120);
+const moved = await page.evaluate(() => document.querySelector('.panel.search').getBoundingClientRect().top > 0);
+check(h0 === 844 && moved, `выход из поиска одним движением: сразу во всю высоту (${h0}), уезжает — ${moved}`);
+await sleep(700);
+check(!(await page.$('.panel')), 'поиск закрыт');
 
 /* ---------- 5. Резервная копия ---------- */
 await tap(page, '.tab.on'); await sleep(450);

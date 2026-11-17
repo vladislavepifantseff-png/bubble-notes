@@ -2,6 +2,7 @@
 import * as S from './store.js';
 import { openList } from './list.js';
 import { esc, zap } from './util.js';
+import { slideAway } from './ui.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>';
 export const ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>';
@@ -89,9 +90,8 @@ export function openSearch({ onClose }) {
   });
 
   function close() {
-    input.blur();
-    panel.classList.remove('in');
-    setTimeout(() => panel.remove(), 400);
+    clearTimeout(t);
+    slideAway(panel);
     onClose?.();
   }
   $('.back').addEventListener('click', close);

@@ -1,6 +1,6 @@
 // Архив: пузыри текущего пространства, убранные с главного экрана. Вернуть или удалить навсегда.
 import * as S from './store.js';
-import { actionSheet, confirmSheet, toast } from './ui.js';
+import { actionSheet, confirmSheet, toast, slideAway } from './ui.js';
 import { esc, zap } from './util.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>';
@@ -63,8 +63,7 @@ export function openArchive({ onClose }) {
   });
 
   function close() {
-    panel.classList.remove('in');
-    setTimeout(() => panel.remove(), 400);
+    slideAway(panel);
     onClose?.(changed);
   }
   $('.back').addEventListener('click', close);

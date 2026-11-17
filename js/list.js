@@ -1,6 +1,6 @@
 // Экран ветки: список записей, перетаскивание, выполнено, главный шаг (карандаш), свайп.
 import * as S from './store.js';
-import { actionSheet, textSheet, confirmSheet, toast } from './ui.js';
+import { actionSheet, textSheet, confirmSheet, toast, slideAway } from './ui.js';
 import { esc, pl, zap, linkify, autosize } from './util.js';
 import { ICON_PHOTO, thumbsHTML, hydrate, viewPhotos, pendingStrip, addPending, storePhotos, discardPending } from './photos.js';
 
@@ -348,15 +348,13 @@ export function openList({ bubble, branch, backLabel, onClose, focusId = null })
 
   /* header */
   function close() {
-    document.activeElement?.blur?.();
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onCancel);
     ro?.disconnect();
     sortable?.destroy();
     discardPending(pending);
-    panel.classList.remove('in');
-    setTimeout(() => panel.remove(), 400);
+    slideAway(panel);
     onClose?.();
   }
   $('.back').addEventListener('click', close);
