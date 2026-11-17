@@ -154,25 +154,53 @@ export function openList({ bubble, branch, backLabel, onClose }) {
     }, { once: true });
   }
 
-  /* move item */
+  /* move item: сначала ветки этого пузыря, потом «Новая ветка» и «В другой пузырь…» */
+  const NEW_BRANCH = '\u0000new', OTHER_BUBBLE = '\u0000other';
+  const branchOpts = (b) => [
+    ...b.branches.filter((x) => x !== branch).map((x) => ({ label: x.name, value: x.id })),
+    { label: '＋ Новая ветка', value: NEW_BRANCH },
+  ];
+  async function resolveBranch(b, v) {
+    if (v !== NEW_BRANCH) return b.branches.find((x) => x.id === v) || null;
+    const name = await textSheet({ title: `Новая ветка в «${b.name}»`, placeholder: 'Например, «Гости»', ok: 'Создать' });
+    if (!name) return null;
+    const nb = S.newBranch(name);
+    b.branches.push(nb);
+    return nb;
+  }
+  async function pickOtherBubble() {
+    const others = S.space().bubbles.filter((b) => !b.archived && b !== bubble && !(bubble.inbox && b.inbox));
+    if (!others.length) { toast('Сначала создай пузырь-проект'); return null; }
+    const bid = await actionSheet('В какой пузырь?', others.map((b) => ({ label: b.name, value: b.id })));
+    return others.find((b) => b.id === bid) || null;
+  }
   async function moveItem(it) {
-    const sp = S.space();
-    const opts = sp.bubbles.filter((b) => !b.archived).map((b) => ({ label: b.name, value: b.id }));
-    const bid = await actionSheet('Перенести в…', opts);
-    if (!bid) return;
-    const tb = sp.bubbles.find((b) => b.id === bid);
-    let target = S.miscOf(tb);
-    if (tb.branches.length > 1) {
-      const brId = await actionSheet(`«${tb.name}»: в какую ветку?`, tb.branches.map((x) => ({ label: x.name, value: x.id })));
-      if (!brId) return;
-      target = tb.branches.find((x) => x.id === brId);
+    let tb = bubble, target = null;
+    if (!bubble.inbox) {
+      const v = await actionSheet('Перенести в ветку…', [...branchOpts(bubble), { label: 'В другой пузырь…', value: OTHER_BUBBLE }]);
+      if (!v) return;
+      if (v !== OTHER_BUBBLE) target = await resolveBranch(bubble, v);
+      else tb = await pickOtherBubble();
+    } else {
+      tb = await pickOtherBubble();
     }
-    if (target === branch) return;
+    if (!tb) return;
+    if (!target) {
+      if (tb.inbox) target = S.miscOf(tb);
+      else {
+        const v = await actionSheet(`«${tb.name}»: в какую ветку?`, branchOpts(tb));
+        if (!v) return;
+        target = await resolveBranch(tb, v);
+      }
+    }
+    if (!target || target === branch) return;
     branch.items = branch.items.filter((i) => i !== it);
     target.items.push(it);
     S.save();
     render();
-    toast(tb.branches.length > 1 ? `Перенесено: «${tb.name}» → ${target.name}` : `Перенесено в «${tb.name}»`);
+    toast(tb === bubble ? `Перенесено в «${target.name}»`
+      : tb.inbox ? 'Перенесено во «Входящие»'
+      : `Перенесено: «${tb.name}» → ${target.name}`);
   }
 
   /* clicks */

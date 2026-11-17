@@ -263,9 +263,12 @@ ui.more.addEventListener('click', async () => {
   const { space, bubble } = found;
   const v = await actionSheet(`Пузырь «${bubble.name}»`, [
     { label: 'Переименовать', value: 'rename' },
+    { label: 'Перенести в другое пространство', value: 'move' },
     { label: 'Удалить пузырь', value: 'delete', danger: true },
   ]);
-  if (v === 'rename') {
+  if (v === 'move') {
+    await moveBubble(space, bubble);
+  } else if (v === 'rename') {
     const name = await textSheet({ title: 'Название пузыря', value: bubble.name, ok: 'Сохранить' });
     if (name) { bubble.name = name; S.save(); refresh(); }
   } else if (v === 'delete') {
@@ -278,6 +281,30 @@ ui.more.addEventListener('click', async () => {
     toast('Пузырь удалён');
   }
 });
+
+/* перенос пузыря со всеми ветками и записями в другое пространство */
+async function moveBubble(from, bubble) {
+  const NEW = '\u0000new';
+  const others = S.state.spaces.filter((s) => s !== from);
+  const v = await actionSheet(`Перенести «${bubble.name}» в…`, [
+    ...others.map((s) => ({ label: s.name, value: s.id })),
+    { label: '＋ Новое пространство', value: NEW },
+  ]);
+  if (!v) return;
+  let to = others.find((s) => s.id === v);
+  if (v === NEW) {
+    const name = await textSheet({ title: 'Новое пространство', placeholder: 'Например, «Контент»', ok: 'Создать' });
+    if (!name) return;
+    to = S.newSpace(name);
+    S.state.spaces.push(to);
+  }
+  if (!to) return;
+  from.bubbles = from.bubbles.filter((b) => b !== bubble);
+  to.bubbles.push(bubble);
+  S.save();
+  closeBubble();
+  toast(`«${bubble.name}» → пространство «${to.name}»`);
+}
 
 /* ---------- нижние кнопки ---------- */
 ui.newB.addEventListener('click', async () => {

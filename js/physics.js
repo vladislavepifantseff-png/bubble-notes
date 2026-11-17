@@ -1,5 +1,7 @@
 // Поле пузырей: простая 2D-физика (притяжение к центру, столкновения, стенки),
 // перетаскивание пальцем и упругая деформация («сминаются» и «пружинят»).
+// Физика считается шагами по 1/60 с, а кадры рисуются с интерполяцией между шагами —
+// иначе на экранах 120 Гц и при неровных кадрах пузыри подёргиваются.
 const STEP = 1000 / 60;
 const GAP = 6;
 const MAX_SPEED = 30;
@@ -76,7 +78,7 @@ export class BubbleField {
       if (!seen.has(id)) { b.el.remove(); this.bs.delete(id); }
     }
     this.rescale();
-    fresh.forEach((b) => { b.r = spawn === 'top' ? b.tr * 0.3 : b.tr; });
+    fresh.forEach((b) => { b.r = b.pr = spawn === 'top' ? b.tr * 0.3 : b.tr; });
   }
 
   create(d, spawn) {
@@ -98,8 +100,8 @@ export class BubbleField {
     }
     const bub = {
       id: d.id, el, name: null, sub: null, count: 0,
-      x, y, vx: 0, vy: spawn === 'top' ? 6 : 0, r: 20, tr: 20, nr: 20, base: 0,
-      def: 0, dv: 0, ang: 0, cmp: 0, cang: 0, ph: Math.random() * 6.28,
+      x, y, px: x, py: y, vx: 0, vy: spawn === 'top' ? 6 : 0, r: 20, pr: 20, tr: 20, nr: 20, base: 0,
+      def: 0, pdef: 0, dv: 0, ang: 0, cmp: 0, cang: 0, ph: Math.random() * 6.28,
       drag: false, out: false, entering: spawn !== 'top', born: performance.now(),
     };
     this.bs.set(d.id, bub);
@@ -155,6 +157,7 @@ export class BubbleField {
       const d = Math.hypot(dx, dy) || 1;
       x.x = cx + (dx / d) * R;
       x.y = cy + (dy / d) * R;
+      x.px = x.x; x.py = x.y;
       x.vx = -(dx / d) * 12;
       x.vy = -(dy / d) * 12;
       x.el.classList.remove('gone');
@@ -215,8 +218,12 @@ export class BubbleField {
     this.acc = Math.min(this.acc + (now - this.last), STEP * 4);
     this.last = now;
     const t = now / 1000;
-    while (this.acc >= STEP) { this.step(t); this.acc -= STEP; }
-    this.render(t);
+    while (this.acc >= STEP) {
+      for (const b of this.bs.values()) { b.px = b.x; b.py = b.y; b.pr = b.r; b.pdef = b.def; }
+      this.step(t);
+      this.acc -= STEP;
+    }
+    this.render(t, this.acc / STEP);
     requestAnimationFrame(this.loop);
   }
 
@@ -318,13 +325,15 @@ export class BubbleField {
     if (c > b.cmp) { b.cmp = c; b.cang = ang; }
   }
 
-  render(t) {
+  render(t, a = 1) {
+    const mix = (p, c) => p + (c - p) * a;
     for (const b of this.bs.values()) {
       if (!b.base) continue;
-      const k = (b.r / b.base) * (1 + 0.014 * Math.sin(t * 1.7 + b.ph));
-      const sx = k * (1 - b.def), sy = k * (1 + b.def * 0.75);
+      const x = mix(b.px, b.x), y = mix(b.py, b.y), r = mix(b.pr, b.r), def = mix(b.pdef, b.def);
+      const k = (r / b.base) * (1 + 0.014 * Math.sin(t * 1.7 + b.ph));
+      const sx = k * (1 - def), sy = k * (1 + def * 0.75);
       b.el.style.transform =
-        `translate3d(${(b.x - b.base).toFixed(1)}px,${(b.y - b.base).toFixed(1)}px,0) rotate(${b.ang.toFixed(3)}rad) scale(${sx.toFixed(4)},${sy.toFixed(4)}) rotate(${(-b.ang).toFixed(3)}rad)`;
+        `translate3d(${(x - b.base).toFixed(2)}px,${(y - b.base).toFixed(2)}px,0) rotate(${b.ang.toFixed(3)}rad) scale(${sx.toFixed(4)},${sy.toFixed(4)}) rotate(${(-b.ang).toFixed(3)}rad)`;
     }
   }
 }
