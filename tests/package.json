@@ -1,0 +1,13 @@
+{
+  "name": "bubble-notes-tests",
+  "private": true,
+  "type": "module",
+  "description": "Проверки «Заметок Бабл» в headless Chrome. Само приложение сборки не требует.",
+  "scripts": {
+    "scenarios": "node scenarios.mjs out",
+    "jitter": "node jitter.mjs out 60 drag && node jitter.mjs out 120 rest"
+  },
+  "devDependencies": {
+    "puppeteer-core": "23.11.1"
+  }
+}
