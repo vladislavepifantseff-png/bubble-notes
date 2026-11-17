@@ -107,6 +107,15 @@ export function captureSheet({ bubbles, bubbleId = null, branchesOf }) {
   });
 }
 
+/** Где показать уведомление, чтобы не закрывать кнопки, пузыри и записи. */
+export const TOAST_BAND = 40; // свободная полоса под вкладками главного экрана
+function toastTop() {
+  const panels = document.querySelectorAll('.panel.in .sheet');
+  if (panels.length) return panels[panels.length - 1].getBoundingClientRect().top + 2;
+  const bar = [...document.querySelectorAll('#top, #top2')].find((el) => !el.hidden);
+  return (bar ? bar.getBoundingClientRect().bottom : 60) + 6;
+}
+
 let toastEl = null, toastTimer = null;
 export function toast(msg) {
   if (!toastEl) {
@@ -116,7 +125,9 @@ export function toast(msg) {
     document.body.appendChild(toastEl);
   }
   toastEl.textContent = msg;
+  toastEl.style.top = `${toastTop()}px`;
+  toastEl.classList.remove('out');
   requestAnimationFrame(() => toastEl.classList.add('in'));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('in'), 2200);
+  toastTimer = setTimeout(() => toastEl.classList.replace('in', 'out'), 2000);
 }

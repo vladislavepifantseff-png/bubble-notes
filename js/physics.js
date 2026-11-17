@@ -5,6 +5,8 @@
 const STEP = 1000 / 60;
 const GAP = 6;
 const MAX_SPEED = 30;
+// мягкость касаний: какую долю перекрытия убираем за шаг (свободные / один пузырь в пальце)
+const SOFT = 0.16, SOFT_HELD = 0.45;
 
 export class BubbleField {
   constructor(el, { onTap } = {}) {
@@ -101,7 +103,7 @@ export class BubbleField {
     const bub = {
       id: d.id, el, name: null, sub: null, count: 0,
       x, y, px: x, py: y, vx: 0, vy: spawn === 'top' ? 6 : 0, r: 20, pr: 20, tr: 20, nr: 20, base: 0,
-      def: 0, pdef: 0, dv: 0, ang: 0, cmp: 0, cang: 0, ph: Math.random() * 6.28,
+      def: 0, pdef: 0, dv: 0, ang: 0, cmp: 0, cang: 0, sq: 0, ac: 1, as: 0, ph: Math.random() * 6.28,
       drag: false, out: false, entering: spawn !== 'top', born: performance.now(),
     };
     this.bs.set(d.id, bub);
@@ -258,8 +260,8 @@ export class BubbleField {
       b.r += (b.tr - b.r) * 0.14;
     }
 
-    // столкновения
-    for (let it = 0; it < 3; it++) {
+    // столкновения: мягкие — перекрытие убирается постепенно, толчок только при сближении
+    for (let it = 0; it < 2; it++) {
       for (let i = 0; i < B.length; i++) {
         const a = B[i];
         if (a.out) continue;
@@ -275,12 +277,19 @@ export class BubbleField {
           if (fa && fc) continue;
           const o = min - d, nx = dx / d, ny = dy / d;
           const wa = fa ? 0 : fc ? 1 : 0.5, wc = 1 - wa;
-          a.x -= nx * o * wa; a.y -= ny * o * wa;
-          c.x += nx * o * wc; c.y += ny * o * wc;
+          // если пузырь сильно влез (быстро тащат пальцем) — выталкиваем решительнее
+          const soft = fa || fc ? SOFT_HELD : SOFT;
+          const corr = o * Math.min(1, soft + Math.max(0, o - GAP * 2) * 0.02);
+          a.x -= nx * corr * wa; a.y -= ny * corr * wa;
+          c.x += nx * corr * wc; c.y += ny * corr * wc;
           if (it === 0) {
-            const k = Math.min(o, 30) * 0.12;
-            a.vx -= nx * k * wa * 2; a.vy -= ny * k * wa * 2;
-            c.vx += nx * k * wc * 2; c.vy += ny * k * wc * 2;
+            // гасим только скорость сближения, без отскока — пузыри мягко упираются
+            const rv = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+            if (rv < 0) {
+              const j = -rv * 0.55;
+              a.vx -= nx * j * wa * 2; a.vy -= ny * j * wa * 2;
+              c.vx += nx * j * wc * 2; c.vy += ny * j * wc * 2;
+            }
             const ang = Math.atan2(ny, nx);
             if (o / a.r > a.cmp) { a.cmp = o / a.r; a.cang = ang; }
             if (o / c.r > c.cmp) { c.cmp = o / c.r; c.cang = ang; }
@@ -298,24 +307,31 @@ export class BubbleField {
         if (inside || now - b.born > 2500) b.entering = false;
         else continue;
       }
-      if (b.x - b.r < l) { const o = l - (b.x - b.r); b.x += o; b.vx = Math.abs(b.vx) * 0.5; this.wall(b, o, 0); }
-      if (b.x + b.r > r) { const o = b.x + b.r - r; b.x -= o; b.vx = -Math.abs(b.vx) * 0.5; this.wall(b, o, 0); }
-      if (b.y - b.r < top) { const o = top - (b.y - b.r); b.y += o; b.vy = Math.abs(b.vy) * 0.5; this.wall(b, o, Math.PI / 2); }
-      if (b.y + b.r > bot) { const o = b.y + b.r - bot; b.y -= o; b.vy = -Math.abs(b.vy) * 0.5; this.wall(b, o, Math.PI / 2); }
+      if (b.x - b.r < l) { const o = l - (b.x - b.r); b.x += o; b.vx = Math.abs(b.vx) * 0.3; this.wall(b, o, 0); }
+      if (b.x + b.r > r) { const o = b.x + b.r - r; b.x -= o; b.vx = -Math.abs(b.vx) * 0.3; this.wall(b, o, 0); }
+      if (b.y - b.r < top) { const o = top - (b.y - b.r); b.y += o; b.vy = Math.abs(b.vy) * 0.3; this.wall(b, o, Math.PI / 2); }
+      if (b.y + b.r > bot) { const o = b.y + b.r - bot; b.y -= o; b.vy = -Math.abs(b.vy) * 0.3; this.wall(b, o, Math.PI / 2); }
     }
 
-    // упругая деформация
+    // упругая деформация: сила касания и его направление сглаживаются,
+    // поэтому пузырь плавно поджимается и плавно расправляется, без вздрагиваний
     for (const b of B) {
-      let target = Math.min(0.2, b.cmp * 1.4);
-      let ang = b.cang;
+      b.sq += (b.cmp - b.sq) * (b.cmp > b.sq ? 0.25 : 0.08);
+      let target = Math.min(0.13, b.sq * 1.1);
+      let ang = b.cang, follow = b.cmp > 0.002 ? 0.12 : 0;
       if (b.drag) {
         const sp = Math.hypot(b.vx, b.vy);
-        const st = Math.min(0.16, sp * 0.012);
-        if (st > target) { target = -st; ang = Math.atan2(b.vy, b.vx); }
+        const st = Math.min(0.12, sp * 0.009);
+        if (st > target) { target = -st; ang = Math.atan2(b.vy, b.vx); follow = 0.2; }
       }
-      if (Math.abs(target) > 0.01) b.ang = ang;
-      b.dv += (target - b.def) * 0.22;
-      b.dv *= 0.7;
+      // направление храним как вектор удвоенного угла: сплющивание вдоль θ и θ+180° — одно и то же
+      if (follow) {
+        b.ac += (Math.cos(2 * ang) - b.ac) * follow;
+        b.as += (Math.sin(2 * ang) - b.as) * follow;
+        b.ang = Math.atan2(b.as, b.ac) / 2;
+      }
+      b.dv += (target - b.def) * 0.09;
+      b.dv *= 0.8;
       b.def += b.dv;
     }
   }

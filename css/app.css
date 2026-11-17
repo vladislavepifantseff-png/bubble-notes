@@ -196,11 +196,25 @@ html.kb .sh { margin-bottom: 8px; }
 .chips.sub .chip { font-size: 13px; padding: 6px 11px; }
 .cap-note { font-size: 12px; opacity: .55; padding: 0 4px; }
 
-/* уведомление: уезжает целиком за верхний край (с учётом «чёлки») и не перехватывает нажатия */
-.toast { position: fixed; left: 50%; top: calc(var(--safe-t) + 12px); z-index: 60; pointer-events: none; transform: translate(-50%, calc(-100% - var(--safe-t) - 40px)); opacity: 0; visibility: hidden; background: #fff; color: var(--pond-2); font-weight: 700; font-size: 14px; padding: 10px 16px; border-radius: 99px; box-shadow: 0 10px 30px rgba(0,0,0,.3); transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .3s, visibility 0s .3s; max-width: calc(100vw - 32px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.toast.in { transform: translate(-50%, 0); opacity: 1; visibility: visible; transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
+/* уведомление: компактная тёмная «таблетка» под верхними кнопками (на главном) или над первой записью (в ветке);
+   проявляется, затем уплывает вверх и тает. Нажатия не перехватывает. */
+.toast {
+  position: fixed; left: 50%; z-index: 60; pointer-events: none;
+  top: calc(var(--safe-t) + 100px); /* точное место задаёт ui.js */
+  max-width: calc(100vw - 64px); padding: 6px 13px; border-radius: 99px;
+  background: rgba(22, 30, 37, .9); color: #fff; border: 1px solid rgba(255,255,255,.14);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.25);
+  font-size: 13px; font-weight: 600; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  opacity: 0; visibility: hidden; transform: translate(-50%, 8px) scale(.96);
+  transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .25s, visibility 0s .3s;
+}
+.toast.in { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition: transform .3s cubic-bezier(.2,.8,.2,1), opacity .2s, visibility 0s; }
+.toast.out { opacity: 0; visibility: hidden; transform: translate(-50%, -18px); transition: transform .45s ease-in, opacity .4s, visibility 0s .45s; }
 
 @media (prefers-reduced-motion: reduce) {
   .bubble::before, .plus::before { animation: none; }
   .anim .node .pop, .anim .links path, .frame.fresh path, .mark.fresh .pg { animation: none; }
+  .toast, .toast.in, .toast.out { transform: translate(-50%, 0); }
 }

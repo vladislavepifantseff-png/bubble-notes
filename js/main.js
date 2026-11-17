@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import { BubbleField } from './physics.js';
-import { actionSheet, textSheet, confirmSheet, toast, captureSheet } from './ui.js';
+import { actionSheet, textSheet, confirmSheet, toast, captureSheet, TOAST_BAND } from './ui.js';
 import { openList, branchMenu } from './list.js';
 import { esc, pl, zap } from './util.js';
 
@@ -48,7 +48,7 @@ function bubbleData() {
 
 function updateInsets() {
   if (view !== 'space') return;
-  const top = ui.top.getBoundingClientRect().bottom + 10;
+  const top = ui.top.getBoundingClientRect().bottom + TOAST_BAND; // полоса под вкладками — для уведомлений
   const barTop = ui.plus.getBoundingClientRect().top - 14;
   field.setInsets(top, innerHeight - barTop);
   field.resize();
